@@ -13,7 +13,7 @@
 ![image](https://github.com/user-attachments/assets/bd5bd95e-178f-4cba-86ab-263760a47e16)
 - GET;  /manager/{museum_id}/paintings/{painting_id} , /manager/{museum_id}/paintings/create_painting; получение списка художников {artist_name}; 200 OK: {\[{artist_name, atrist_years, artist_bio}\]};
 - POST; /manager/{museum_id}/paintings/{painting_id} , /manager/{museum_id}/paintings/create_painting; создание нового художника {artist_name, atrist_years, artist_bio}; 200 OK: {\[artist_id\]}
-- GET; /hub/selected; получение списка отмеченных картин; {login}; 200 OK: {\<painting info>\]}
+- GET; /hub/selected; получение списка отмеченных картин; {login}; 200 OK: {\[<painting information>\]}
 
 *ЗАМЕЧАНИЕ: В полях "параметры" и "формат ответа" я использую нотацию <> для обозначения передачи / приёма полей описывающих ту или иную сущность.*
 
