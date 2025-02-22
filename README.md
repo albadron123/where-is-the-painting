@@ -12,5 +12,10 @@
 *ВАЖНО: структура API будет уточняться в дальнейшем*
 ![image](https://github.com/user-attachments/assets/bd5bd95e-178f-4cba-86ab-263760a47e16)
 
+## Стек технологий
+*Front-end:* html / css / js
+*Back-end:* golang
+...
+
 
 
