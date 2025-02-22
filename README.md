@@ -16,7 +16,7 @@
  - *Front-end:* html / css / js
  - *Back-end:* golang
  - *База данных:* PostgreSQL
-...
+ - ...
 
 
 
