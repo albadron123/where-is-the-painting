@@ -18,5 +18,8 @@
  - *База данных:* PostgreSQL
  - ...
 
+## Дополнительные материалы
+Презентация к нулевой контрольной точке: https://docs.google.com/presentation/d/10sMYQAsGhA44SDhhrnWoaHOpqRAGaU-kURYKNWoYoB8/edit?usp=sharing
+
 
 
