@@ -10,23 +10,6 @@
 
 ## Текущая структура API
 *ВАЖНО: структура API будет уточняться в дальнейшем*
-Метод	URL	Описание	Параметры	Формат ответа
-GET	/hub	Получить список "картина-авторы-музей" по названию картины и параметру достоверности данных	{painting_name, only_approved}	200 OK: {[{<painting_info>, [<autor_info>], <museum_info>]}
-GET	/hub	Получить список "картина-авторы-музей" по автору и параметру достоверности данных	{author_name, only_approved}	200 OK: {[{<painting_info>, [<autor_info>], <museum_info>]}
-POST	/hub	Добавить картину в избранное	{login, painting_name}	201 Created
-DELETE	/hub	Убрать картину из избранного	{login, painting_name}	204 No Content
-POST	/login	Авторизация пользователя	{login, password}	200 OK: {Token}
-POST	/register	Регистрация пользователя	{login, password}	201 Created: {login}
-POST	/manager/register_museum	Регистрация нового музея	{museum_name, museum_website}	201 Created: {museum_id}
-GET	/manager	Получение информации о правах	{login}	200 OK: {[museum_id, <rights>]}
-GET	/manager/{museum_id}/paintings	Получение списка картин в музее	{museum_id}	200 OK: {[<painting_info>]}
-POST	/manager/{museum_id}/paintings/create_painting	Создание новой картины	{museum_id, <поля информации о картине>}	200 OK: {<painting_info>}
-PUT	/manager/{museum_id}/paintings/{painting_id}	Изменение картины	{museum_id, painting_id, <поля информации о картине>}	200 OK
-DELETE	/manager/{museum_id}/paintings	Удаление картины	{museum_id, painting_id}	204 No Content
-GET	/manager/{museum_id}/rights	Получение списка сотрудников музея и их прав	{museum_id}	200 OK: {[login, <rights>]}
-POST	/manager/{museum_id}/add_user	Добавление сотрудника музея	{museum_id,new_user_login}	201 Created
-PUT	/manager/{museum_id}/{login}	Изменение прав сотрудника музея	{museum_id, new_user_login, <обновленные права>}	200 OK
-DELETE	/manager/{museum_id}/rights	Удаление сотрудника музея	{museum_id, user_to_remove_login}	204 No Content
 ![image](https://github.com/user-attachments/assets/bd5bd95e-178f-4cba-86ab-263760a47e16)
 
 
