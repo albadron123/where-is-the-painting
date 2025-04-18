@@ -1,8 +1,8 @@
 package main
 
 import (
-	"context" //transactions
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -12,41 +12,92 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
+
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
-type painting struct {
-	Id             int    `json:"id"`
-	Title          string `json:"title"`
-	CreationYear   string `json:"creation_year"`
-	WhereToFind    string `json:"where_to_find"`
-	PictureAddress string `json:"picture_address"`
+type Painting struct {
+	ID             int           `json:"id"`
+	Title          string        `json:"title" binding:"required"`
+	CreationYear   sql.NullInt32 `json:"creation_year" gorm:"check:(creation_year>=0)"`
+	WhereToFind    string        `json:"where_to_find" binding:"required"`
+	PictureAddress string        `json:"picture_address" binding:"required"`
+	AuthorID       int           `json:"author_id" binding:"required"`
+	Author         Author        `gorm:"foreignKey:author_id" binding:"-"`
+	MuseumID       int
+	Museum         Museum `gorm:"foreignKey:museum_id" binding:"-"`
 }
 
-type author struct {
-	Id        int    `json:"id"`
-	Name      string `json:"name"`
-	BirthYear *int   `json:"birth_year"`
-	DeathYear *int   `json:"death_year"`
-	Biography string `json:"biography"`
+type User struct {
+	ID             int
+	Login          string `gorm:"unique"`
+	PasswordHashed string
 }
 
-type rights struct {
-	UserId          int
-	MuseumId        int
-	GiveRights      bool
-	ChangePaintings bool
+type Museum struct {
+	ID       int
+	Name     string `gorm:"unique" binding:"required"`
+	WebPage  string `binding:"required"`
+	Verified bool   `gorm:"default:false"`
 }
 
-var db *sql.DB
+// TODO: try to set constraints against the current year in GORM (if possible)
+type Author struct {
+	ID        int
+	Name      string        `gorm:"not null"`
+	BirthYear sql.NullInt32 `gorm:"check:(birth_year>=0)"`
+	DeathYear sql.NullInt32 `gorm:"check:(death_year>birth_year)"`
+	Biography string
+}
+
+type UserPreference struct {
+	UserID     int      `gorm:"primaryKey"`
+	User       User     `gorm:"foreignKey:user_id"`
+	PaintingID int      `gorm:"primaryKey"`
+	Painting   Painting `gorm:"foreignKey:painting_id"`
+}
+
+type Right struct {
+	UserID          int    `gorm:"primaryKey" json:"user_id" binding:"required"`
+	User            User   `gorm:"foreignKey:user_id" binding:"-"`
+	MuseumID        int    `gorm:"primaryKey"`
+	Museum          Museum `gorm:"foreignKey:museum_id" binding:"-"`
+	GiveRights      *bool  `json:"give_rights" binding:"required"`
+	ChangePaintings *bool  `json:"change_paintings" binding:"required"`
+}
+
+var db *gorm.DB
 
 func main() {
+
+	//=====================================SETTING UP THE DATABASE GORM===========================================
+	connStr := "host=localhost user=postgres password=123 dbname=Paintings_Web_App sslmode=disable"
+	var err error
+	db, err = gorm.Open(postgres.New(postgres.Config{
+		DSN:                  connStr,
+		PreferSimpleProtocol: true,
+	}), &gorm.Config{})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("GORM_DB", db)
+
+	//setting auto-migrations for tables in db
+	//note: when connecting to the db through the db connection with database/sql and then connecting it to gorm
+	//		auto-migration gives strange errors saying something about pq.
+	db.AutoMigrate(&User{}, &Author{}, &Painting{}, &Museum{}, &UserPreference{}, &Right{})
+
+	//====================================SETTING UP THE ROUTER===================================================
 	router := gin.Default()
 	router.Static("/assets", "./assets")
+	router.LoadHTMLGlob("templates/*.html")
 
 	router.GET("/", getLanding)
 
 	router.GET("/paintings_:request", searchPainting)
 	router.GET("/authors_:request", searchAuthor)
+
 	router.POST("/login", login)
 	router.POST("/register", register)
 
@@ -60,27 +111,40 @@ func main() {
 	router.PUT("/museum:museum_id/rights", requireAuth, changeUserRights)
 	router.DELETE("/museum:museum_id/rights", requireAuth, deleteUserRights)
 
-	//router.PUT("/painting:painting_id/change_painting", requireAuth, changePainting)
-	//router.DELETE("/painting:painting_id/delete_painting", requireAuth, deletePainting)
+	router.PUT("/painting:painting_id/change_painting", requireAuth, changePainting)
+	router.DELETE("/painting:painting_id/delete_painting", requireAuth, deletePainting)
 
+	//router.GET("/favorite", requireAuth, getFavorites) //!
 	router.POST("/favorite", requireAuth, postFavorite)
 	router.DELETE("/favorite", requireAuth, deleteFavorite)
 
-	router.GET("/login_info", requireAuth, getLoginInfo)
+	router.GET("/login_info", requireAuth, getLoginInfo) //!
 
-	router.LoadHTMLGlob("templates/*.html")
-
-	connStr := "user=postgres password=pass dbname=Paintings_Web_App sslmode=disable"
-	var err error
-	db, err = sql.Open("postgres", connStr)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("DB", db)
-	defer db.Close()
-
-	fmt.Println("Starting server...")
 	router.Run("localhost:8080")
+
+	/*
+		var birth_year sql.NullInt32
+		var death_year sql.NullInt32
+		birth_year.Int32 = 2000
+		birth_year.Valid = true
+		death_year.Int32 = 0
+		death_year.Valid = true
+		testAuthor := Author{Name: "Bill", BirthYear: birth_year, DeathYear: death_year, Biography: ""}
+		db.Create(&testAuthor)
+	*/
+	//db.Create(&testMuseum)
+	//user_preference := UserPreference{UserID: 1, PaintingID: 1}
+	/*
+		var creation_year sql.NullInt32
+		creation_year.Int32 = 2010
+		creation_year.Valid = true
+		painting := Painting{Title: "Hello", CreationYear: creation_year, WhereToFind: "", PictureAddress: "", AuthorID: 1, MuseumID: 2}
+		db.Create(&painting)
+	*/
+
+	/*right := Right{UserID: 1, MuseumID: 3}
+	db.Create(&right)*/
+
 }
 
 func getLanding(c *gin.Context) {
@@ -88,7 +152,7 @@ func getLanding(c *gin.Context) {
 }
 
 func searchPainting(c *gin.Context) {
-	type body struct {
+	type Result struct {
 		Id             int    `json:"id"`
 		Title          string `json:"title"`
 		CreationYear   string `json:"creation_year"`
@@ -99,91 +163,73 @@ func searchPainting(c *gin.Context) {
 		AuthorName     string `json:"author_name"`
 		MuseumName     string `json:"museum_name"`
 	}
+	var results []Result = []Result{}
 	request := c.Param("request")
-	fmt.Println(request)
-	sql := fmt.Sprintf("select p.*, a.name, m.name from ((select * from paintings where LOWER(title) like LOWER('%%%s%%')) as p join authors as a on p.author_id=a.id) join museums as m on p.museum_id = m.id", request)
-	rows, err := db.Query(sql)
+	//fmt.Println("request:" + request)
+	err := db.Raw("select p.*, a.name as author_name, m.name as museum_name from ((select * from paintings where LOWER(title) like LOWER(?)) as p join authors as a on p.author_id=a.id) join museums as m on p.museum_id = m.id", "%%"+request+"%%").Scan(&results).Error
 	if err != nil {
-		panic(err)
-	}
-	var result = []body{}
-	for rows.Next() {
-		b := body{}
-		err := rows.Scan(&b.Id, &b.Title, &b.CreationYear, &b.WhereToFind, &b.PictureAddress, &b.MuseumId, &b.AuthorId, &b.AuthorName, &b.MuseumName)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-		result = append(result, b)
+		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": "something went wrong"})
 	}
 	//c.HTML(http.StatusOK, "index.html", gin.H{"paintings": paintings})
-	c.IndentedJSON(http.StatusOK, result)
+	c.IndentedJSON(http.StatusOK, results)
 }
 
 func searchAuthor(c *gin.Context) {
+	type Author struct {
+		ID        int    `json:"id"`
+		Name      string `json:"name"`
+		BirthYear string `json:"birth_year"`
+		DeathYear string `json:"death_year"`
+		Biography string `json:"biography"`
+	}
+
 	request := c.Param("request")
-	query := fmt.Sprintf("select * from authors where name like '%s%%';", request)
-	fmt.Println(query)
-	rows, err := db.Query(query)
-	if err != nil {
-		panic(err)
-	}
-	var authors = []author{}
-	for rows.Next() {
-		a := author{}
-		err := rows.Scan(&a.Id, &a.Name, &a.BirthYear, &a.DeathYear, &a.Biography)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-		authors = append(authors, a)
-	}
+	var authors = []Author{}
+	db.Where("lower(name) like lower(?)", "%%"+request+"%%").Find(&authors)
 	//c.HTML(http.StatusOK, "index.html", gin.H{"paintings": paintings})
 	c.IndentedJSON(http.StatusOK, authors)
 }
 
 func postPainting(c *gin.Context) {
-	type body struct {
-		Title          string `json:"title"`
-		CreationYear   int    `json:"creation_year"`
-		WhereToFind    string `json:"where_to_find"`
-		PictureAddress string `json:"picture_address"`
-		AuthorId       int    `json:"author_id"`
-	}
-	var b body
-	if err := c.BindJSON(&b); err != nil {
+	var painting Painting
+	var err error
+	if err := c.BindJSON(&painting); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
 		return
 	}
 
-	user_id, exists := c.Get("user_id")
+	userId, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed create new painting"})
 		return
 	}
 
-	museum_id, err := strconv.Atoi(c.Param("museum_id"))
+	painting.MuseumID, err = strconv.Atoi(c.Param("museum_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to create new painting"})
 		return
 	}
 
-	has_permission := false
-	query := fmt.Sprintf("select change_paintings from rights where user_id = %f and museum_id = %d", user_id, museum_id)
-	err = db.QueryRow(query).Scan(&has_permission)
-	if err != nil || !has_permission {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "you are not permitted to create paintings"})
+	err = db.First(&Museum{}, painting.MuseumID).Error
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "museum id is not correct"})
 		return
 	}
 
-	query = fmt.Sprintf("insert into paintings(title,creation_year,where_to_find,picture_address,author_id,museum_id) values('%s',%d,'%s','%s', %d, %d)",
-		b.Title,
-		b.CreationYear,
-		b.WhereToFind,
-		b.PictureAddress,
-		b.AuthorId,
-		museum_id)
-	_, err = db.Exec(query)
+	var userRight Right
+	err = db.Where("user_id = ? and museum_id = ?", userId, painting.MuseumID).First(&userRight).Error
+	if err != nil || !(*userRight.ChangePaintings) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "you are not permitted to add new paintings to the collection of this museum"})
+		return
+	}
+
+	err = db.First(&Author{}, painting.AuthorID).Error
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "author id is not correct"})
+		return
+	}
+
+	err = db.Create(&painting).Error
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to create new painting"})
 		return
@@ -193,68 +239,101 @@ func postPainting(c *gin.Context) {
 }
 
 func changePainting(c *gin.Context) {
-	var newPainting painting
-	if err := c.BindJSON(&newPainting); err != nil {
-		fmt.Println(err)
+	var painting Painting
+	var err error
+	if err := c.BindJSON(&painting); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
 		return
 	}
-	//fmt.Println("insert into paintings values (" + strconv.Itoa(newPainting.Id) + ", " + newPainting.Title + ", " + newPainting.Author + ")")
-	//_, err := db.Exec("insert into paintings values (" + strconv.Itoa(newPainting.Id) + ", '" + newPainting.Title + "', '" + newPainting.Author + "')")
-	/*
-		if err != nil {
-			fmt.Println(err.Error())
-		}
-	*/
-	//paintings = append(paintings, newPainting)
-	//c.IndentedJSON(http.StatusCreated, newPainting)
+
+	userId, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed change painting"})
+		return
+	}
+
+	painting.MuseumID, err = strconv.Atoi(c.Param("museum_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to change painting"})
+		return
+	}
+
+	err = db.First(&Museum{}, painting.MuseumID).Error
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "museum id is not correct"})
+		return
+	}
+
+	var userRight Right
+	err = db.Where("user_id = ? and museum_id = ?", userId, painting.MuseumID).First(&userRight).Error
+	if err != nil || !(*userRight.ChangePaintings) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "you are not permitted to change paintings in the collection of this museum"})
+		return
+	}
+
+	painting.ID, err = strconv.Atoi(c.Param("painting_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to change painting"})
+	}
+
+	err = db.First(&Author{}, painting.AuthorID).Error
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "author id is not correct"})
+		return
+	}
+
+	err = db.Save(&painting).Error
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to change painting"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{})
 }
 
 func deletePainting(c *gin.Context) {
-	var newPainting painting
-	if err := c.BindJSON(&newPainting); err != nil {
-		fmt.Println(err)
-		return
-	}
-	//fmt.Println("insert into paintings values (" + strconv.Itoa(newPainting.Id) + ", " + newPainting.Title + ", " + newPainting.Author + ")")
-	//_, err := db.Exec("insert into paintings values (" + strconv.Itoa(newPainting.Id) + ", '" + newPainting.Title + "', '" + newPainting.Author + "')")
 	/*
-		if err != nil {
-			fmt.Println(err.Error())
+		var newPainting Painting
+		if err := c.BindJSON(&newPainting); err != nil {
+			fmt.Println(err)
+			return
 		}
+		//fmt.Println("insert into paintings values (" + strconv.Itoa(newPainting.Id) + ", " + newPainting.Title + ", " + newPainting.Author + ")")
+		//_, err := db.Exec("insert into paintings values (" + strconv.Itoa(newPainting.Id) + ", '" + newPainting.Title + "', '" + newPainting.Author + "')")
+		//paintings = append(paintings, newPainting)
+		//c.IndentedJSON(http.StatusCreated, newPainting)
 	*/
-	//paintings = append(paintings, newPainting)
-	//c.IndentedJSON(http.StatusCreated, newPainting)
 }
 
 func login(c *gin.Context) {
 	var body struct {
-		Login    string
-		Password string
+		Login    string `json:"login" binding:"required"`
+		Password string `json:"password" binding:"required"`
 	}
 	if c.Bind(&body) != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
 		return
 	}
-	var password_hashed string
-	var user_id int
-	query := fmt.Sprintf("select id, password_hashed from users where login='%s'", body.Login)
-	fmt.Println(query)
-	err := db.QueryRow(query).Scan(&user_id, &password_hashed)
+
+	var user User
+	err := db.Where("login = ?", body.Login).First(&user).Error
 	if err != nil {
-		if err == sql.ErrNoRows {
+		fmt.Println(err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+
 			c.JSON(http.StatusBadRequest, gin.H{"error": "user with this login is not registered"})
 			return
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": "internal database error"})
 		return
 	}
-	err = bcrypt.CompareHashAndPassword([]byte(password_hashed), []byte(body.Password))
+	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHashed), []byte(body.Password))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid password"})
 		return
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"sub": user_id, "exp": time.Now().Add(time.Hour).Unix()})
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"sub": user.ID, "exp": time.Now().Add(time.Hour).Unix()})
 	var tokenString string
 	tokenString, err = token.SignedString([]byte("top-secret"))
 
@@ -273,26 +352,29 @@ func login(c *gin.Context) {
 }
 
 func getLoginInfo(c *gin.Context) {
-	user_id, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to add favorite"})
-		return
-	}
-	var user_name string
-	query := fmt.Sprintf("select login from users where id = %f", user_id)
-	fmt.Println(query)
-	err := db.QueryRow(query).Scan(&user_name)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"user_name": user_name})
+	/*
+		user_id, exists := c.Get("user_id")
+		if !exists {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to add favorite"})
+			return
+		}
+		var user_name string
+		query := fmt.Sprintf("select login from users where id = %f", user_id)
+		fmt.Println(query)
+		err := db.QueryRow(query).Scan(&user_name)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"user_name": user_name})
+	*/
 }
 
 func register(c *gin.Context) {
+
 	var body struct {
-		Login    string
-		Password string
+		Login    string `json:"login" binding:"required"`
+		Password string `json:"password" binding:"required"`
 	}
 
 	if c.Bind(&body) != nil {
@@ -300,17 +382,15 @@ func register(c *gin.Context) {
 		return
 	}
 
-	password_hashed, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
+	passwordHashed, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to hash password"})
 		return
 	}
 
-	query := fmt.Sprintf("Insert into users(login, password_hashed) values ('%s','%s')", body.Login, password_hashed)
-	fmt.Println(query)
-	_, err = db.Exec(query)
-
+	newUser := User{Login: body.Login, PasswordHashed: string(passwordHashed)}
+	err = db.Create(&newUser).Error
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "couldn't register a user"})
 	}
@@ -318,6 +398,7 @@ func register(c *gin.Context) {
 }
 
 func requireAuth(c *gin.Context) {
+
 	tokenString, err := c.Cookie("Auth")
 
 	if err != nil {
@@ -347,48 +428,51 @@ func requireAuth(c *gin.Context) {
 }
 
 func postFavorite(c *gin.Context) {
+
 	var body struct {
-		PaintingId int `json:"painting_id"`
+		PaintingId int `json:"painting_id" binding:"required"`
 	}
 	if c.Bind(&body) != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
 		return
 	}
 
-	user_id, exists := c.Get("user_id")
+	userId, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to add favorite"})
 		return
 	}
 
-	query := fmt.Sprintf("insert into users_preferences values (%f, %d)", user_id, body.PaintingId)
-	fmt.Println(query)
-	_, err := db.Exec(query)
+	var newUserPreference UserPreference
+	newUserPreference.UserID = int(userId.(float64))
+	newUserPreference.PaintingID = body.PaintingId
+	err := db.Create(&newUserPreference).Error
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to add favorite"})
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{})
+
 }
 
 func deleteFavorite(c *gin.Context) {
+
 	var body struct {
-		PaintingId int `json:"painting_id"`
+		PaintingId int `json:"painting_id" binding:"required"`
 	}
 	if c.Bind(&body) != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
 		return
 	}
 
-	user_id, exists := c.Get("user_id")
+	userId, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to remove favorite"})
 		return
 	}
 
-	query := fmt.Sprintf("delete from users_preferences where user_id = %d and painting_id = %d ", user_id, body.PaintingId)
-	_, err := db.Exec(query)
+	err := db.Where("user_id = ? and painting_id = ?", userId, body.PaintingId).Delete(&UserPreference{}).Error
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to remove favorite"})
 		return
@@ -398,54 +482,32 @@ func deleteFavorite(c *gin.Context) {
 }
 
 func postRegisterMuseum(c *gin.Context) {
-	var body struct {
-		Name    string `json:"name"`
-		WebPage string `json:"web_page"`
-	}
-	if c.Bind(&body) != nil {
+	var newMuseum Museum = Museum{}
+	var newRight Right = Right{}
+	if c.Bind(&newMuseum) != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
 		return
 	}
-
-	user_id, exists := c.Get("user_id")
+	newMuseum.Verified = false
+	userId, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to create museum"})
 		return
 	}
 
-	ctx := context.Background()
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to create museum"})
-		return
-	}
-
-	query := fmt.Sprintf("insert into museums(name, web_page) values ('%s', '%s')", body.Name, body.WebPage)
-	_, err = tx.ExecContext(ctx, query)
-	if err != nil {
-		tx.Rollback()
-		fmt.Println("Transaction rollback!")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to create museum"})
-		return
-	}
-	var museum_id int
-	query = fmt.Sprintf("select id from museums where name='%s'", body.Name)
-	err = tx.QueryRowContext(ctx, query).Scan(&museum_id)
-	if err != nil {
-		tx.Rollback()
-		fmt.Println("Transaction rollback!")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to create museum"})
-		return
-	}
-	query = fmt.Sprintf("insert into rights values (%f, %d, true, true)", user_id, museum_id)
-	_, err = tx.ExecContext(ctx, query)
-	if err != nil {
-		tx.Rollback()
-		fmt.Println("Transaction rollback!")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to create museum"})
-		return
-	}
-	err = tx.Commit()
+	err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&newMuseum).Error; err != nil {
+			return err
+		}
+		newRight.MuseumID = newMuseum.ID
+		newRight.UserID = int(userId.(float64))
+		*newRight.GiveRights = true
+		*newRight.ChangePaintings = true
+		if err := tx.Create(&newRight).Error; err != nil {
+			return err
+		}
+		return nil
+	})
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to create museum"})
 		return
@@ -454,7 +516,7 @@ func postRegisterMuseum(c *gin.Context) {
 }
 
 func getMuseumPaintings(c *gin.Context) {
-	type body struct {
+	type Painting struct {
 		Id             int    `json:"id"`
 		Title          string `json:"title"`
 		CreationYear   string `json:"creation_year"`
@@ -467,153 +529,126 @@ func getMuseumPaintings(c *gin.Context) {
 
 	museum_id, err := strconv.Atoi(c.Param("museum_id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to remove rights"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to interpret museum id"})
 		return
 	}
-
-	query := fmt.Sprintf("select p.*, a.name from paintings as p join authors as a on p.author_id = a.id where p.museum_id = %d", museum_id)
-	rows, err := db.Query(query)
+	//reason for type change of painting: we want to interpret years as strings
+	var paintings []Painting
+	err = db.Where("museum_id = ?", museum_id).Find(&paintings).Error
 	if err != nil {
-		panic(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to find paintings"})
 	}
-	var result = []body{}
-	for rows.Next() {
-		b := body{}
-		err := rows.Scan(&b.Id, &b.Title, &b.CreationYear, &b.WhereToFind, &b.PictureAddress, &b.MuseumId, &b.AuthorId, &b.AuthorName)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-		result = append(result, b)
-	}
-
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, paintings)
 }
 
 func postUserRights(c *gin.Context) {
-	res := CanChangeRights(c)
-	if res == nil {
+	var err error
+	var newRight Right = Right{}
+	newRight.MuseumID, err = strconv.Atoi(c.Param("museum_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid museum id"})
 		return
 	}
-	query := fmt.Sprintf("insert into rights values (%d, %d, %t, %t)", res.UserId, res.MuseumId, res.GiveRights, res.ChangePaintings)
-	_, err := db.Exec(query)
+	err = c.Bind(&newRight)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
+		return
+	}
+	if !CanChangeRights(c, &newRight) {
+		return
+	}
+	err = db.Create(&newRight).Error
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to give rights"})
 		return
 	}
-
 	c.JSON(http.StatusCreated, gin.H{})
 }
 
 func changeUserRights(c *gin.Context) {
-	res := CanChangeRights(c)
-	if res == nil {
+	var err error
+	var newRight Right = Right{}
+	newRight.MuseumID, err = strconv.Atoi(c.Param("museum_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid museum id"})
 		return
 	}
-	query := fmt.Sprintf("update rights set give_rights=%t, change_paintings=%t where user_id=%d and museum_id=%d", res.GiveRights, res.ChangePaintings, res.UserId, res.MuseumId)
-	fmt.Println(query)
-	_, err := db.Exec(query)
+	err = c.Bind(&newRight)
+	if err != nil {
+		fmt.Println(err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
+		return
+	}
+	if !CanChangeRights(c, &newRight) {
+		return
+	}
+	err = db.Save(&newRight).Error
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to change rights"})
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{})
+	c.JSON(http.StatusCreated, gin.H{})
 }
 
 func deleteUserRights(c *gin.Context) {
-	var body struct {
-		Login string `json:"login"`
+	type Body struct {
+		UserId int `json:"user_id" binding:"required"`
 	}
-	if c.Bind(&body) != nil {
+	var body Body = Body{}
+	var err error
+	var right Right = Right{}
+	right.MuseumID, err = strconv.Atoi(c.Param("museum_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid museum id"})
+		return
+	}
+	err = c.Bind(&body)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
 		return
 	}
-
-	user_id, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to remove rights"})
+	right.UserID = body.UserId
+	if !CanChangeRights(c, &right) {
 		return
 	}
-
-	museum_id, err := strconv.Atoi(c.Param("museum_id"))
+	err = db.Where("user_id = ? and museum_id = ?", right.UserID, right.MuseumID).Delete(&Right{}).Error
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to remove rights"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed remove right"})
 		return
 	}
-
-	has_permission := false
-	delete_rights_from_id := -1
-	query := fmt.Sprintf("select give_rights from rights where user_id = %f and museum_id = %d", user_id, museum_id)
-	err = db.QueryRow(query).Scan(&has_permission)
-	if err != nil || !has_permission {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "you are not permitted to do this"})
-		return
-	}
-
-	query = fmt.Sprintf("select id from users where login = '%s'", body.Login)
-	err = db.QueryRow(query).Scan(&delete_rights_from_id)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to remove rights"})
-		return
-	}
-	if user_id == (float64)(delete_rights_from_id) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "you can't remove your own rights"})
-		return
-	}
-
-	query = fmt.Sprintf("delete from rights where user_id=%d", delete_rights_from_id)
-	_, err = db.Exec(query)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to remove rights"})
-		return
-	}
-
 	c.JSON(http.StatusNoContent, gin.H{})
 }
 
 // A support function for postUserRights and setUserRights
-func CanChangeRights(c *gin.Context) *rights {
-	var body struct {
-		Login           string `json:"login"`
-		GiveRights      bool   `json:"give_rights"`
-		ChangePaintings bool   `json:"change_paintings"`
-	}
-	if c.Bind(&body) != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
-		return nil
-	}
+func CanChangeRights(c *gin.Context, right *Right) bool {
 
-	user_id, exists := c.Get("user_id")
+	userId, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to change rights"})
-		return nil
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return false
 	}
 
-	museum_id, err := strconv.Atoi(c.Param("museum_id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to change rights"})
-		return nil
+	var permitted Right
+	err := db.Where("user_id = ? and museum_id = ?", userId, right.MuseumID).First(&permitted).Error
+	if err != nil || !(*permitted.ChangePaintings) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user has no permission to change rights"})
+		return false
 	}
+	var user User
+	err = db.Where("id = ?", right.UserID).First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 
-	has_permission := false
-	change_rights_user_id := -1
-	query := fmt.Sprintf("select give_rights from rights where user_id = %f and museum_id = %d", user_id, museum_id)
-	err = db.QueryRow(query).Scan(&has_permission)
-	if err != nil || !has_permission {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "you are not permitted to do this"})
-		return nil
+			c.JSON(http.StatusBadRequest, gin.H{"error": "couldn't find a user"})
+
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to change rights"})
+		}
+		return false
 	}
-	query = fmt.Sprintf("select id from users where login = '%s'", body.Login)
-	fmt.Println(query)
-	err = db.QueryRow(query).Scan(&change_rights_user_id)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to change rights"})
-		return nil
-	}
-	if user_id == (float64)(change_rights_user_id) {
+	if user.ID == int(userId.(float64)) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "you can't change your own rights"})
-		return nil
+		return false
 	}
-	return &rights{change_rights_user_id, museum_id, body.GiveRights, body.ChangePaintings}
+	return true
 }
