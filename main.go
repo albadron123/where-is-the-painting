@@ -72,7 +72,7 @@ var db *gorm.DB
 func main() {
 
 	//=====================================SETTING UP THE DATABASE GORM===========================================
-	connStr := "host=localhost user=postgres password=123 dbname=Paintings_Web_App sslmode=disable"
+	connStr := "host=localhost user=postgres password=pass dbname=Paintings_Web_App port=5431 sslmode=disable"
 	var err error
 	db, err = gorm.Open(postgres.New(postgres.Config{
 		DSN:                  connStr,
@@ -103,7 +103,9 @@ func main() {
 
 	router.POST("/register_museum", requireAuth, postRegisterMuseum)
 
+	//TODO: check how dates are represented here in json
 	router.POST("/museum:museum_id/create_painting", requireAuth, postPainting)
+	//TODO: check how dates are represented here in json
 	router.GET("/museum:museum_id/all_paintings", getMuseumPaintings)
 
 	//router.GET("/museum:museum_id/rights", requireAuth, getAllUsersRights)
@@ -111,14 +113,15 @@ func main() {
 	router.PUT("/museum:museum_id/rights", requireAuth, changeUserRights)
 	router.DELETE("/museum:museum_id/rights", requireAuth, deleteUserRights)
 
+	//TODO: check how dates are represented here in json
 	router.PUT("/painting:painting_id/change_painting", requireAuth, changePainting)
 	router.DELETE("/painting:painting_id/delete_painting", requireAuth, deletePainting)
 
-	//router.GET("/favorite", requireAuth, getFavorites) //!
+	router.GET("/favorite", requireAuth, getFavorites)
 	router.POST("/favorite", requireAuth, postFavorite)
 	router.DELETE("/favorite", requireAuth, deleteFavorite)
 
-	router.GET("/login_info", requireAuth, getLoginInfo) //!
+	router.GET("/login_info", requireAuth, getLoginInfo)
 
 	router.Run("localhost:8080")
 
@@ -352,22 +355,21 @@ func login(c *gin.Context) {
 }
 
 func getLoginInfo(c *gin.Context) {
-	/*
-		user_id, exists := c.Get("user_id")
-		if !exists {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to add favorite"})
-			return
-		}
-		var user_name string
-		query := fmt.Sprintf("select login from users where id = %f", user_id)
-		fmt.Println(query)
-		err := db.QueryRow(query).Scan(&user_name)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"user_name": user_name})
-	*/
+	user_id, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to add favorite"})
+		return
+	}
+	var user_name string
+	query := fmt.Sprintf("select login from users where id = %f", user_id)
+	fmt.Println(query)
+	var u User
+	err := db.First(&u).Error
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"user_name": user_name})
 }
 
 func register(c *gin.Context) {
@@ -395,6 +397,7 @@ func register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "couldn't register a user"})
 	}
 
+	c.JSON(http.StatusOK, gin.H{})
 }
 
 func requireAuth(c *gin.Context) {
@@ -425,6 +428,34 @@ func requireAuth(c *gin.Context) {
 		return
 	}
 	c.Next()
+}
+
+func getFavorites(c *gin.Context) {
+	type Result struct {
+		Id             int    `json:"id"`
+		Title          string `json:"title"`
+		CreationYear   string `json:"creation_year"`
+		WhereToFind    string `json:"where_to_find"`
+		PictureAddress string `json:"picture_address"`
+		MuseumId       int    `json:"museum_id"`
+		AuthorId       int    `json:"author_id"`
+		AuthorName     string `json:"author_name"`
+		MuseumName     string `json:"museum_name"`
+	}
+	var res Result
+	//need to be done almost with json
+	userId, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to add favorite"})
+		return
+	}
+	//then return all favorites
+	err := db.Raw("select p.*, a.name as author_name, m.name as museum_name from (((select * from paintings where id in (select painting_id from user_preferences where user_id = ?)) as p join authors as a on p.author_id=a.id) join museum as m on p.museum_id = m.id)", userId).Scan(&res).Error
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed get favorites"})
+		return
+	}
+	c.IndentedJSON(http.StatusOK, res)
 }
 
 func postFavorite(c *gin.Context) {

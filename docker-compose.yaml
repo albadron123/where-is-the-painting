@@ -1,0 +1,9 @@
+services: 
+  postgres: 
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: Paintings_Web_App
+    ports:
+      - "5431:5432"
