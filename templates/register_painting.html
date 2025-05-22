@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Добавить картину</title>
+        <style>
+            #contents
+            {
+                height: 100vh;
+                overflow: auto;
+                background: linear-gradient(#7c7c7c, #242424);
+                align-items: center;
+                display: flex;
+                
+            }
+            body 
+            {
+                margin: 0;
+                padding: 0;
+            }
+            th
+            {
+                padding: 2% 1%;
+            }
+        </style>
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/expandedsearch.css">
+        <script src="/js/searchbar.js"></script>
+        <script src="/js/register_painting.js"></script>
+    </head>
+    <body>
+        <div id="get-museum-id" style="display:none">{{.museum_id}}</div>
+        <div id="contents">
+            <div style="background-color: whitesmoke; text-align: center; padding: 5%; margin: auto; width: 40%;">
+                <h2>Добавление картины</h2>
+                <div>
+                    <p id="update-info" style="height: 1em; color:red;"></p>
+                    <form id="form">
+                        <table style="width: 100%;">
+                            <tr>
+                                <th>Название картины </th>
+                                <th><input type="text" class="f-in" id="name"></th>
+                            </tr>
+                            <tr>
+                                <th>Год создания </th>
+                                <th><input type="number" class="f-in" id="creation-year"></th>
+                            </tr>
+                            <tr>
+                                <th>Автор </th>
+                                <th style="width:50%;">
+                                    <div style="width: 100%; position: relative; height: 5em;" id="search-view">
+                                    <input id="searchbar" oninput="searchAuthors()" onfocus="search_focus(ADD_NEW_AUTHOR_STR)" >
+                                    <!--onfocusout="search_unfocus()"-->
+                                    <ul id="search-results"></ul>
+                                    </div>
+                                </th>
+                            </tr>
+                            <tr>
+                                <th>Где найти? </th>
+                                <th><textarea rows="10" class="f-in" id="where-to-find"></textarea></th>
+                            </tr>
+                            <tr>
+                                <th>Изображение </th>
+                                <th><input id="fileinput" type="file" accept="image/*"></th>
+                            </tr>
+                            <tr>
+                                <th><input type="submit"></th>
+                            </tr>
+                        </table>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

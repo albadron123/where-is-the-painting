@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DropdownTest</title>
+    <style>
+        #searchbar
+        {
+            margin: 0;
+            padding: 0;
+            width: 20%;
+        }
+        #search-results
+        {
+            width: 20%;
+            margin: 0;
+            padding: 0;
+            position: absolute;
+            background-color: rgba(200, 200, 200, 50);
+        }
+    </style>
+    <script>
+
+        async function uploadFile1() {
+            ourFile = document.getElementById("fileinput").files;
+            if(ourFile.length != 1)
+            {
+                console.log("uploading file error (select 1 and only 1 file!)")
+                return
+            }
+            formData     = new FormData();
+            filePart     = ourFile[0]
+            jsonPart     = '{"hello": "world"}';
+
+            formData.append('json', jsonPart);
+            formData.append('file', filePart);
+
+            const rawResponse = await fetch( '/debug', {
+                method: 'POST',
+                body: formData
+            });
+            
+        };
+
+        async function search() {
+            var node = document.getElementById('search-results');
+            const query = document.getElementById("searchbar").value
+            if(query == "")
+            {
+                node.innerHTML = 
+                `
+                <li><a href="/">Add new author</a></li>
+                `
+                return
+            }
+            const responce = await fetch(`http://localhost:8080/paintings_${query}`)
+            if (!responce.ok)
+            {
+                //check for errors later
+                node.innerHTML = 
+                `
+                <li><a href="/">Add new author</a></li>
+                `
+                console.log("Hi!")
+                return;
+            }
+            const data = await responce.json()
+            console.log(data.length)
+            innerHypertext = ''
+            for (let i = 0; i < data.length; i++)
+            {
+                where_to_find = data[i].where_to_find==""?"не экспонируется":data[i].where_to_find
+                innerHypertext += 
+                `
+                <li class="search-res">
+                    <b>${data[i].title}(${data[i].creation_year})</b><br>
+                </li>
+                `
+            };
+            innerHypertext += `<li><a href="/">Add new author</a></li>`
+            console.log(innerHypertext)
+            console.log(data.length)
+            node.innerHTML = innerHypertext;
+        }
+        function searchunfocus() {
+            var node = document.getElementById('search-results');
+            node.innerHTML = ''
+        }
+        function searchfocus() {
+            var node = document.getElementById('search-results');
+            node.innerHTML = '<li><a href="/">Add new author</a></li>'
+        }
+    </script>
+</head>
+<body>
+     <input type="text" id="searchbar" value = "" placeholder="Enter an author" oninput="search()" onfocusout="searchunfocus()" onfocus="searchfocus()">
+     <ul id="search-results"></ul>
+     <p>Hello World</p>
+     <p>Hello World</p>
+     <p>Hello World</p>
+     <p>Hello World</p>
+     <p>Hello World</p>
+     <form>
+     <input id="fileinput" type="file" accept="image/*">
+     </form>
+     <button onclick="uploadFile1()">Hello</button>
+</body>

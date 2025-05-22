@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>  
+    <head>
+        <title>{{.museum_name}}</title>
+    </head>
+    <style>
+        body
+        {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+        }
+
+        h1
+        {
+            text-align: center;
+        }
+        
+        hr
+        {
+            margin: 0;
+        }
+
+        #contents
+        {
+            height: 90vh;
+            overflow: auto;
+            background: linear-gradient(#eee, #ccc);
+        }
+
+        #users-block 
+        {
+            outline: solid 1px;
+            float: left;
+            display: block;
+            width: 20%;
+            padding: 0.5%;
+            margin: 0.5%;
+        }
+        #users-block h3
+        {
+            text-align: center;
+        }
+        #paintings-block 
+        {
+            float: left;
+            display: block;
+            width: 76%;
+            padding: 1%;
+        }
+        #paintings-block h3
+        {
+            text-align: center;            
+        }
+        #search-bar
+        {
+            width: 100%;
+        }
+
+    </style>
+    <link rel="stylesheet" href="/css/expandedsearch.css">
+    <script src="/js/searchbar.js"></script>
+    <script src="/js/museum_page.js"></script>
+    <body>
+        <div id="get-museum-id" style="display:none">{{.museum_id}}</div>
+        <H1>{{.museum_name}}</H1>
+        <hr>
+        <div id = "contents">
+            <div id = "users-block">
+                <h3>Сотрудники:</h3>
+                <hr>
+                <p style="height:1em;" id="update-info"></p>
+                {{$y := .my_id}}
+                {{if .am_admin}}
+                    <ul id="users-list">
+                        {{range $x := .users}}
+                            <li id="user{{$x.Id}}">
+                            {{if eq $x.Id $y}}
+                                {{$x.Login}} (это ты)
+                            {{else}}
+                                admin rights:<input type="checkbox" id="cb{{$x.Id}}" onchange="checkRight({{$x.Id}})" {{if $x.IsAdmin}}checked{{end}}>
+                                {{$x.Login}}
+                                <button onclick="deleteUser({{$x.Id}})">удалить</button>
+                            {{end}}
+                            </li>
+                        {{end}}
+                    </ul>
+                    <div style="width: 100%; position: relative;">
+                        <input id="searchbar" oninput="search_users()" onfocusout="search_unfocus()" placeholder="Введите имя пользователя, которого хотите добавить">
+                        <ul id="search-results"></ul>
+                    </div>
+                {{else}}
+                    <ul>
+                        {{range $x := .users}}
+                            <li>
+                            {{if $x.IsAdmin}}
+                                <b>
+                                {{$x.Login}} (админ)
+                                </b>
+                            {{else}}
+                                {{$x.Login}}
+                                {{if eq $x.Id $y}}
+                                (это ты)
+                                {{end}}
+                                
+                            {{end}}
+                            </li>
+                        {{end}}
+                    </ul>
+                {{end}}
+            </div>
+            <div id = "paintings-block">
+                <a href="/"><-- Вернуться на главную</a>
+                <h3>Поиск по коллекции музея </h3>
+                <input type = "text" placeholder="искать нужное..." id="big-searchbar" style="width:90%">
+                <button style="width:10% margin:0; padding: 0% 1%;" onclick="pressSearchButton()">Искать</button>
+                <ul id="paintings-register">
+                    Введите что-нибудь, чтобы посмотреть регистр картин музея
+                    <!--
+                    <li>"PAINTING NAME 1" АВТОР: <a href="/">AUTHOR1</a> <a href="/">редактировать</a> <a href = "#">удалить</a></li>
+                    <li>"PAINTING NAME 2" АВТОР: <a href="/">AUTHOR2</a> <a href="/">редактировать</a> <a href = "/">удалить</a></li>
+                    <li>"PAINTING NAME 3" АВТОР: <a href="/">AUTHOR3</a> <a href="/">редактировать</a> <a href = "/">удалить</a></li>
+                    <li>"PAINTING NAME 4" АВТОР: <a href="/">AUTHOR4</a> <a href="/">редактировать</a> <a href = "/">удалить</a></li>-->
+                </ul>
+                <div id="morePlaceholder"></div>
+                <a href = "./museum{{.museum_id}}/create_painting">Добавить новую картину</a>
+            </div>
+        </div>
+    </body>
+</html>

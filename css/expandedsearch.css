@@ -1,0 +1,22 @@
+#searchbar
+{
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+#search-results
+{
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    position: absolute;
+    background-color: rgba(200, 200, 200, 50);
+}
+
+#search-results li 
+{
+    margin: 0;
+    padding: 0;
+    text-align: left;
+    list-style-type: none;
+}

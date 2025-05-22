@@ -1,0 +1,51 @@
+<html>
+    <head>
+        <title>Зарегистрировать музей</title>
+        <link rel="stylesheet" href="/css/forms.css">
+        <style>
+            #contents
+            {
+                height: 100vh;
+                overflow: auto;
+                background: linear-gradient(#7c7c7c, #242424);
+                align-items: center;
+                display: flex;
+            }
+            body 
+            {
+                margin: 0;
+                padding: 0;
+            }
+            th
+            {
+                padding: 2% 1%;
+            }
+        </style>
+        <script src="/js/register_museum.js"></script>
+    </head>
+    <body>
+        <div id="contents">
+            <div style="background-color: whitesmoke; text-align: center; padding: 5%; margin: auto;">
+                <h2>Зарегистрировать музей</h2>
+                <div>
+                    <p id="update-info" style="height: 1em; color:red;"></p>
+                    <form id="form">
+                        <table>
+                            <tr>
+                                <th>Название музея</th>
+                                <th><input type="text" class="f-in" id="name"></th>
+                            </tr>
+                            <tr>
+                                <th>Вебсайт</th>
+                                <th><input type="url" class="f-in" id="web-page"></th>
+                            </tr>
+                            <tr>
+                                <th><input type="submit"></th>
+                            </tr>
+                        </table>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

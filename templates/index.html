@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Where is...</title>
 <!--
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
     <script crossorigin src="https://unpkg.com/react@17/umd/react.development.js" defer></script>
@@ -29,13 +29,14 @@
     </script>
 -->
     <style>
-        /*
+        
         body 
         {
             margin: 0;
             padding: 0;
+            display: flex;
         }
-        */
+        
         #change-mode
         {
             width: 100%;
@@ -75,223 +76,54 @@
         }
     </style>
 
-    <script>
-
-        var searchingPaintings = true;
-
-        async function search()
-        {
-            if(searchingPaintings)
-            {
-                fetch_paintings();
-            }            
-            else
-            {
-                fetch_authors();
-            }
-        }
-
-        async function fetch_paintings() {
-            var node = document.getElementById('paintings-placeholder');
-            const query = document.getElementById("searchbar").value
-            if(query == "")
-            {
-                node.innerHTML = ''
-                return
-            }
-            const responce = await fetch(`http://localhost:8080/paintings_${query}`)
-            if (!responce.ok)
-            {
-                //check for errors later
-                node.innerHTML = ''
-                return;
-            }
-            const data = await responce.json()
-            console.log(data.length)
-
-
-            innerHypertext = ''
-            for (let i = 0; i < data.length; i++)
-            {
-                where_to_find = data[i].where_to_find==""?"не экспонируется":data[i].where_to_find
-                innerHypertext += `
-                <div class="search-res">
-                    <div class="search-pic">
-                        <img src="assets/${data[i].picture_address}" width="100%">
-                    </div>
-                    <div class="search-desc"> 
-                        НАЗВАНИЕ: <b>${data[i].title}(${data[i].creation_year})</b><br>
-                        АВТОР: <b>${data[i].author_name}</b><br>
-                        МУЗЕЙ: <b><a>${data[i].museum_name}</b></a><br>
-                        ГДЕ НАЙТИ: <b>${where_to_find}</b>
-                    </div>
-                </div>
-                `
-            };
-            console.log(innerHypertext)
-            console.log(data.length)
-            node.innerHTML = innerHypertext;
-        }
-
-        async function fetch_authors() {
-            var node = document.getElementById('paintings_placeholder');
-            const query = document.getElementById("searchbar").value
-            if(query == "")
-            {
-                node.innerHTML = ''
-                return
-            }
-            const responce = await fetch(`http://localhost:8080/authors_${query}`)
-            if (!responce.ok)
-            {
-                //check for errors later
-                node.innerHTML = ''
-                return;
-            }
-            const data = await responce.json()
-            console.log(data.length)
-            
-            innerHypertext = ''
-            for (let i = 0; i < data.length; i++)
-            {
-                innerHypertext += `<div>${data[i].name}(${data[i].birth_year}-${data[i].death_year})<hr></div>`
-            };
-            node.innerHTML = innerHypertext;
-        }
-
-
-        
-        function logout(event)
-        {
-            event.preventDefault();
-            // NOTE: logout here is just a 'FAKE'-logout 
-            // NOTE: logout now doesn't support updating the pages etc.
-            // NOTE: Only for one-page-testing purpuses
-            document.getElementById("user-header").innerHTML=`
-            <form id='login-form'>
-            вход
-                <p id="enter-status" style="color:red; height:1em;margin:0;padding: 0;"> </p>
-                <input type="text" id="enter-login" value="" placeholder="Enter login..."><br>
-                <input type="password" id="enter-password" value="" placeholder="Enter password..."></input><br>
-                <input type="submit" value="войти">
-                </form>
-            `; 
-        }
-
-        
-        async function sendData(event) 
-        {
-            event.preventDefault();
-            // Construct post data
-            ent_login = document.getElementById('enter-login');
-            ent_password = document.getElementById('enter-password');
-            data = {
-                login : ent_login.value,
-                password : ent_password.value,
-            };
-            const response = await fetch(`http://localhost:8080/login`, {
-            method: "POST",
-            credentials: 'include',
-            body: JSON.stringify(data),
-            headers: {
-                "Content-type": "application/json; charset=UTF-8"
-            }
-            });
-            const responseData = await response.json();
-            if(response.status == 200)
-            {
-                console.log("success");
-                //update to login     
-                document.getElementById("user-header").innerHTML=`
-                Вы авторизованы как <b>${data.login}</b><br>
-                <a href="www.google.com"> посмотреть свои любимые картины</a><br>
-                <input type="button" value="выйти" onclick="logout(event)">`;               
-            }
-            else if (response.status == 400)
-            {
-                document.getElementById("enter-status").innerHTML = responseData.error;
-            }
-            else
-            {
-                document.getElementById("enter-status").innerHTML = "что-то пошло не так";
-            }
-        }
-
-        window.onload=init;
-        async function init()
-        {
-            
-            var form = document.getElementById('login-form');
-            console.log(form)
-            form.addEventListener('submit', sendData);
-
-            //try to get my user-name and data,
-            //if no username or data then just f**k it
-            const responce = await fetch(`http://localhost:8080/login_info`, {credentials: 'include'})
-            if (responce.ok)
-            {
-                /*
-                const data = await responce.json()
-                Вы авторизованы как <b>${data.user_name}</b><br>
-                document.getElementById("user-header").innerHTML=`
-                <div id="auth">
-                    <div id="user-info">
-                    </div>
-                    <a href="www.google.com"> посмотреть свои любимые картины</a><br>
-                    <input type="button" value="выйти" onclick="logout(event)">
-                </div>
-                `; 
-                */
-            }
-            //console.log(document.cookie);
-            document.cookie = "Auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
-        }
-
-        function changeMode()
-        {
-            searchingPaintings = !searchingPaintings;
-            if(searchingPaintings)
-            {
-                document.getElementById("change-mode").innerHTML = `<input type="button" value="search authors instead" onclick="changeMode()">`;
-                document.getElementById("searchbar").placeholder = "Find your favorite paintings..."
-            }
-            else
-            {
-                document.getElementById("change-mode").innerHTML = `<input type="button" value="search paintings instead" onclick="changeMode()">`;
-                document.getElementById("searchbar").placeholder = "Find your favorite authors..."
-            }
-        }
-
-    </script>
+    <script src="/js/index.js"></script>
 </head> 
 <body>
-    <h1 align="center">Where is the painting?</h1>
-    <div id="user-header">
-        <form id='login-form' style="display:block;">
-            вход
-            <p id="enter-status" style="color:red; height:1em;margin:0;padding: 0;"> </p>
+    <div id="user-header" style="display:block; width: 19%; float:left; background-color: rgb(136, 144, 156); margin: 0; min-height: 100vh; overflow: auto; padding: 0 0.4%;">
+        <div style="margin: 5% 30%">
+            <div id="change-registration-mode">вход<br><input type="button" value="регистрация" onclick="changeRegistrationMode()"></div>
+        </div>
+        <form id='login-form' style="display:block; margin: 1% 20%;">
+            <p id="enter-status" style="color:red; height:3em;margin:0;padding: 0;"> </p>
             <input type="text" id="enter-login" value="" placeholder="Enter login..."><br>
             <input type="password" id="enter-password" value="" placeholder="Enter password..."></input><br>
             <input type="submit" value="войти">
         </form>
-        <div id="auth" style="display:none;">
-            <div id="user-info">
+        <div id="auth" style="display:none; text-align: center;">
+            <div id="user-info" style="margin: 5%;">
+                <h2>Добрый день, <u id="cabinet-login-name">ИМЯ ПОЛЬЗОВАТЕЛЯ</u>!</h2>
             </div>
-            <a href="/"> посмотреть свои любимые картины</a><br>
-            <input type="button" value="выйти" onclick="logout(event)">
+            <h3>Ваши музеи:</h3>
+            <ul id="cabinet-museum-list" style="text-align: left;">
+                <li><a href="/">Третьяковка</a></li>
+                <li><a href="/">Музей друзей</a></li>
+            </ul>
+            <br>
+            <a href="/register_museum">зарегистрировать новый музей</a>
+            <br>
+            <br>
+            <input style="width: 90%; margin: 0 5%;" type="button" value="выйти" onclick="logout(event)">
+            <hr>
+            <h3>Любимые картины</h3>
+            <ul id="cabinet-favorites" style="text-align: left;">
+                
+            </ul>
         </div>
-        <form id='signup-form' style="display:none;">
-            регистрация
-            <p id="signup-status" style="color:red; height:1em;margin:0;padding: 0;"> </p>
+        
+        <form id='signup-form' style="display:none; margin: 1% 20%;">
+            <p id="signup-status" style="color:red; height:3em;margin:0;padding: 0;"> </p>
             <input type="text" id="signup-login" value="" placeholder="Enter login..."><br>
             <input type="password" id="signup-password" value="" placeholder="Enter password..."></input><br>
-            <input type="submit" value="войти">
+            <input type="submit" value="зарегистрироваться">
         </form>
     </div>
-    <input type="text" id="searchbar" value = "" placeholder="Find your favorite painting..." oninput="search()">
-    <div id="change-mode"><input type="button" value="search authors instead" onclick="changeMode()"></div>
-    <div id="paintings-placeholder">
-    
+    <div style="display:block; width: 80%; float:left; background-color: rgb(234, 241, 250); margin: 0; padding: 0;">
+        <h1 align="center">Где находится картина?</h1>
+        <hr>
+        <input type="text" id="searchbar" value = "" placeholder="Find your favorite painting..." oninput="search()">
+        <div id="change-mode"><input type="button" value="search authors instead" onclick="changeMode()"></div>
+        <div id="paintings-placeholder">
+    </div>
     </div>
 </body>
 </html>

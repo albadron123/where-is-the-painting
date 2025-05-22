@@ -1,0 +1,59 @@
+<html>
+    <head>
+        <title>Зарегистрировать музей</title>
+        <link rel="stylesheet" href="/css/forms.css">
+        <style>
+            #contents
+            {
+                height: 100vh;
+                overflow: auto;
+                background: linear-gradient(#7c7c7c, #242424);
+                align-items: center;
+                display: flex;
+            }
+            body 
+            {
+                margin: 0;
+                padding: 0;
+            }
+            th
+            {
+                padding: 2% 1%;
+            }
+        </style>
+        <script src="/js/register_author.js"></script>
+    </head>
+    <body>
+        <div id="contents">
+            <div style="background-color: whitesmoke; text-align: center; padding: 5%; margin: auto;">
+                <h2>Зарегистрировать нового автора</h2>
+                <div>
+                    <p id="update-info" style="height: 1em; color:red;"></p>
+                    <form id="form">
+                        <table>
+                            <tr>
+                                <th>Имя автора</th>
+                                <th><input type="text" class="f-in" id="name"></th>
+                            </tr>
+                            <tr>
+                                <th>Год Рождения</th>
+                                <th><input type="number" class="f-in" id="birth-year"></th>
+                            </tr>
+                            <tr>
+                                <th>Год Смерти</th>
+                                <th><input type="number" class="f-in" id="death-year"></th>
+                            </tr>
+                            <tr>
+                                <th>Биография</th>
+                                <th><textarea rows="10" class="f-in" id="biography"></textarea></th>
+                            </tr>
+                            <tr>
+                                <th><input type="submit"></th>
+                            </tr>
+                        </table>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
