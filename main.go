@@ -113,31 +113,30 @@ func main() {
 	router.GET("/museum:museum_id/search_users_:request", searchNewUsers)
 
 	router.GET("/paintings_:request", searchPainting)
+	router.GET("/login_paintings_:request", requireAuth, searchPaintingsLoggedIn)
 	router.GET("/authors_:request", searchAuthor)
 
 	router.POST("/login", login)
 	router.POST("/register", register)
 
-	router.GET("/register_author" /*requireAuthPAGE*/, getRegisterAuthor_PAGE)
+	router.GET("/register_author", requireAuthPAGE, getRegisterAuthor_PAGE)
 	router.POST("/register_author", requireAuth, postRegisterAuthor)
 
-	router.GET("/register_museum" /*requireAuthPAGE*/, getRegisterMuseum_PAGE)
+	router.GET("/register_museum", requireAuthPAGE, getRegisterMuseum_PAGE)
 	router.POST("/register_museum", requireAuth, postRegisterMuseum)
 
 	router.GET("/museum:museum_id", requireAuthPAGE, getMuseum_PAGE)
 
-	router.GET("/museum:museum_id/register_painting" /*requireAuthPAGE*/, registerPainting_PAGE)
-	//TODO: check how dates are represented here in json
+	router.GET("/museum:museum_id/register_painting", requireAuthPAGE, registerPainting_PAGE)
 	router.POST("/museum:museum_id/register_painting", requireAuth, postPainting)
-	//TODO: check how dates are represented here in json
 	router.GET("/museum:museum_id/paintings_:request/page:page_id", getMuseumPaintings)
 
 	//router.GET("/museum:museum_id/rights", requireAuth, getAllUsersRights)
+	//COMMENT: for now is deleted as museum users rights are aquired and rendered by the page route that returns the rendered template.
 	router.POST("/museum:museum_id/rights", requireAuth, postUserRights)
 	router.PUT("/museum:museum_id/rights", requireAuth, changeUserRights)
 	router.DELETE("/museum:museum_id/rights", requireAuth, deleteUserRights)
 
-	//TODO: check how dates are represented here in json
 	router.PUT("/painting:painting_id/change_painting", requireAuth, changePainting)
 	router.DELETE("/painting:painting_id/delete_painting", requireAuth, deletePainting)
 
@@ -148,30 +147,6 @@ func main() {
 	router.GET("/login_info", requireAuth, getLoginInfo)
 
 	router.Run("localhost:8080")
-
-	/*
-		var birth_year sql.NullInt32
-		var death_year sql.NullInt32
-		birth_year.Int32 = 2000
-		birth_year.Valid = true
-		death_year.Int32 = 0
-		death_year.Valid = true
-		testAuthor := Author{Name: "Bill", BirthYear: birth_year, DeathYear: death_year, Biography: ""}
-		db.Create(&testAuthor)
-	*/
-	//db.Create(&testMuseum)
-	//user_preference := UserPreference{UserID: 1, PaintingID: 1}
-	/*
-		var creation_year sql.NullInt32
-		creation_year.Int32 = 2010
-		creation_year.Valid = true
-		painting := Painting{Title: "Hello", CreationYear: creation_year, WhereToFind: "", PictureAddress: "", AuthorID: 1, MuseumID: 2}
-		db.Create(&painting)
-	*/
-
-	/*right := Right{UserID: 1, MuseumID: 3}
-	db.Create(&right)*/
-
 }
 
 func addPaintingsIntoDB(count int, authorId int, museumId int) {
@@ -248,6 +223,50 @@ func searchPainting(c *gin.Context) {
 	request := c.Param("request")
 	//fmt.Println("request:" + request)
 	err := db.Raw("select p.*, a.name as author_name, m.name as museum_name from ((select * from paintings where LOWER(title) like LOWER(?)) as p join authors as a on p.author_id=a.id) join museums as m on p.museum_id = m.id", "%%"+request+"%%").Scan(&results).Error
+	if err != nil {
+		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": "something went wrong"})
+	}
+	//c.HTML(http.StatusOK, "index.html", gin.H{"paintings": paintings})
+	c.IndentedJSON(http.StatusOK, results)
+}
+
+func searchPaintingsLoggedIn(c *gin.Context) {
+	type Result struct {
+		Liked          int    `json:"liked"`
+		ID             int    `json:"id"`
+		Title          string `json:"title"`
+		CreationYear   string `json:"creation_year"`
+		WhereToFind    string `json:"where_to_find"`
+		PictureAddress string `json:"picture_address"`
+		MuseumId       int    `json:"museum_id"`
+		AuthorId       int    `json:"author_id"`
+		AuthorName     string `json:"author_name"`
+		MuseumName     string `json:"museum_name"`
+	}
+
+	userId, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to search for a painting"})
+		return
+	}
+
+	request := c.Param("request")
+
+	fmt.Println(request)
+
+	var results []Result = []Result{}
+
+	err := db.Raw(`
+	create or replace temp view general_search as
+	select p.*, a.name as author_name, m.name as museum_name from 
+	((select * from paintings where LOWER(title) like LOWER(?)) as p join authors as a on p.author_id=a.id) join museums as m on p.museum_id = m.id;
+	create or replace temp view liked_ones as
+	select painting_id from user_preferences where user_id = ? and painting_id in (select id from general_search);
+	select sub.liked, general_search.* from
+	((select painting_id, 1 as "liked" from liked_ones) union
+	(select id, 0 as "liked" from general_search where id not in (select painting_id from liked_ones))) as sub join general_search on
+	general_search.id = sub.painting_id;
+	`, "'%%"+request+"%%'", userId).Find(&results).Error
 	if err != nil {
 		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": "something went wrong"})
 	}

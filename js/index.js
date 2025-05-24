@@ -89,13 +89,17 @@ async function fetch_paintings() {
                 АВТОР: <b>${data[i].author_name}</b><br>
                 МУЗЕЙ: <b><a>${data[i].museum_name}</b></a><br>
                 ГДЕ НАЙТИ: <b>${where_to_find}</b>
-                <hr>
-                <button onclick="likePainting(${data[i].id})">мне нравится</button>
-                <button onclick="dislikePainting(${data[i].id})">мне не нравится</button>
-                <hr>
-            </div>
-        </div>
-        `
+            `;
+        if(authorized)
+        {
+            innerHypertext += `
+            <hr>
+            <button onclick="likePainting(${data[i].id})" style="color:white; background-color:#f567be;">&hearts;</button> мне нравится<br>
+            <button onclick="dislikePainting(${data[i].id})">не нравится</button>
+            <hr>
+            `
+        }
+        innerHypertext += `</div></div>`
     };
     console.log(innerHypertext)
     console.log(data.length)
@@ -190,6 +194,7 @@ function logout(event)
 
     document.getElementById('cabinet-login-name').innerHTML = ``;
     document.getElementById('cabinet-museum-list').innerHTML = ``;
+    document.getElementById('cabinet-favorites').innerHTML = ``;
 
     authorized = false;
     localStorage.setItem("authorized", authorized)
