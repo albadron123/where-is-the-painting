@@ -46,7 +46,6 @@ type Museum struct {
 	Verified bool   `gorm:"default:false"`
 }
 
-// TODO: try to set constraints against the current year in GORM (if possible)
 type Author struct {
 	ID        int
 	Name      string        `gorm:"not null"`
@@ -73,10 +72,14 @@ type Right struct {
 var db *gorm.DB
 
 func main() {
-
-	fmt.Println("5432PORT")
+	_, inContainer := os.LookupEnv("IN_CONTAINER")
 	//=====================================SETTING UP THE DATABASE GORM===========================================
-	connStr := "host=pg user=postgres password=pass dbname=Paintings_Web_App port=5432 sslmode=disable"
+	connStr := ""
+	if (inContainer) {
+		connStr = "host=pg user=postgres password=pass dbname=Paintings_Web_App port=5432 sslmode=disable"
+	} else {
+		connStr = "host=localhost user=postgres password=pass dbname=Paintings_Web_App port=5432 sslmode=disable"
+	}
 	var err error
 	db, err = gorm.Open(postgres.New(postgres.Config{
 		DSN:                  connStr,
@@ -115,6 +118,9 @@ func main() {
 
 	router.GET("/paintings_:request", searchPainting)
 	router.GET("/login_paintings_:request", requireAuth, searchPaintingsLoggedIn)
+	
+	router.GET("/paintings_by_:request", searchByAuthor)
+	router.GET("/login_paintings_by_:request", requireAuth, searchByAuthorLoggedIn)
 	router.GET("/authors_:request", searchAuthor)
 
 	router.POST("/login", login)
@@ -146,8 +152,12 @@ func main() {
 	router.DELETE("/favorite", requireAuth, deleteFavorite)
 
 	router.GET("/login_info", requireAuth, getLoginInfo)
-
-	router.Run("0.0.0.0:8080")
+	
+	if (inContainer) {
+		router.Run("0.0.0.0:8080")
+	} else {
+		router.Run("localhost:8080")
+	}
 }
 
 func addPaintingsIntoDB(count int, authorId int, museumId int) {
@@ -264,6 +274,92 @@ func searchPaintingsLoggedIn(c *gin.Context) {
 		select p.*, a.name as author_name, m.name as museum_name from
 		((select * from paintings where LOWER(title) like LOWER(?)) as p join authors as a on p.author_id=a.id) join museums as m on p.museum_id = m.id 
 		order by position (lower(?) in lower(p.title)) 
+		limit 100;
+		`, "%%"+request+"%%", request).Error
+	if err != nil {
+		fmt.Println(err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to create view"})
+		return
+	}
+
+	err = db.Exec(`
+		create or replace view liked_ones as
+		select painting_id from user_preferences where user_id = ? and painting_id in (select id from general_search);
+		`, userId).Error
+	if err != nil {
+		fmt.Println(err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to create view"})
+		return
+	}
+
+	err = db.Raw(`
+		select sub.liked, general_search.* from
+		((select painting_id, 1 as "liked" from liked_ones) union
+		(select id, 0 as "liked" from general_search where id not in (select painting_id from liked_ones))) as sub join general_search on
+		general_search.id = sub.painting_id;
+		`).Scan(&results).Error
+	if err != nil {
+		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": "something went wrong"})
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, results)
+}
+
+func searchByAuthor(c *gin.Context) {
+	type Result struct {
+		ID             int    `json:"id"`
+		Title          string `json:"title"`
+		CreationYear   string `json:"creation_year"`
+		WhereToFind    string `json:"where_to_find"`
+		PictureAddress string `json:"picture_address"`
+		MuseumId       int    `json:"museum_id"`
+		AuthorId       int    `json:"author_id"`
+		AuthorName     string `json:"author_name"`
+		MuseumName     string `json:"museum_name"`
+	}
+	var results []Result = []Result{}
+	request := c.Param("request")
+	//fmt.Println("request:" + request)
+	err := db.Raw("select p.*, a.name as author_name, m.name as museum_name from ((select * from authors where LOWER(name) like LOWER(?)) as a join paintings as p on p.author_id=a.id) join museums as m on p.museum_id = m.id order by position (lower(?) in lower(a.name)), p.title limit 100", "%%"+request+"%%", request).Scan(&results).Error
+	if err != nil {
+		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": "something went wrong"})
+	}
+	//c.HTML(http.StatusOK, "index.html", gin.H{"paintings": paintings})
+	c.IndentedJSON(http.StatusOK, results)
+}
+
+func searchByAuthorLoggedIn(c *gin.Context) {
+	type Result struct {
+		Liked          int    `json:"liked"`
+		ID             int    `json:"id"`
+		Title          string `json:"title"`
+		CreationYear   string `json:"creation_year"`
+		WhereToFind    string `json:"where_to_find"`
+		PictureAddress string `json:"picture_address"`
+		MuseumId       int    `json:"museum_id"`
+		AuthorId       int    `json:"author_id"`
+		AuthorName     string `json:"author_name"`
+		MuseumName     string `json:"museum_name"`
+	}
+
+	userId, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to search for a painting"})
+		return
+	}
+
+	request := c.Param("request")
+
+	fmt.Println(request)
+	fmt.Println(userId)
+	var results []Result = []Result{}
+
+	err := db.Exec(`
+		create or replace temp view general_search as
+		select p.*, a.name as author_name, m.name as museum_name from
+		((select * from authors where LOWER(name) like LOWER(?)) as a join paintings as p on p.author_id=a.id) join museums as m on p.museum_id = m.id 
+		order by position (lower(?) in lower(a.name)), p.title
 		limit 100;
 		`, "%%"+request+"%%", request).Error
 	if err != nil {

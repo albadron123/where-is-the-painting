@@ -56,19 +56,6 @@ async function init()
     }
 }
 
-
-async function search()
-{
-    if(searchingPaintingsMode)
-    {
-        fetch_paintings();
-    }            
-    else
-    {
-        fetch_authors();
-    }
-}
-
 async function fetch_paintings() {
     var node = document.getElementById('paintings-placeholder');
     const query = document.getElementById("searchbar").value
@@ -90,9 +77,9 @@ async function fetch_paintings() {
     else
     {
         isNowSearchingByTitle = false
-        queryText = `/paintings_by${query}`
+        queryText = `/paintings_by_${query}`
         if(authorized) {
-            queryText = `login_paintings_by${query}`
+            queryText = `login_paintings_by_${query}`
         }
     }
     
@@ -124,12 +111,20 @@ async function fetch_paintings() {
             <div class="search-pic">
                 <img src="assets/${data[i].picture_address}" width="100%">
             </div>
-            <div class="search-desc"> 
-                НАЗВАНИЕ: <b>${formHighlightedSubstring(data[i].title, query)}(${data[i].creation_year})</b><br>
-                АВТОР: <b>${data[i].author_name}</b><br>
-                МУЗЕЙ: <b><a>${data[i].museum_name}</b></a><br>
-                ГДЕ НАЙТИ: <b>${where_to_find}</b>
-            `;
+            <div class="search-desc">`
+		if (isNowSearchingByTitle == true)
+		{
+             innerHypertext += `НАЗВАНИЕ: <b>${formHighlightedSubstring(data[i].title, query)}(${data[i].creation_year})</b><br> 
+								АВТОР: <b>${data[i].author_name}</b><br>`
+		}
+		else
+		{
+		     innerHypertext += `НАЗВАНИЕ: <b>${data[i].title}(${data[i].creation_year})</b><br> 
+								АВТОР: <b>${formHighlightedSubstring(data[i].author_name, query)}</b><br>`
+		}
+		innerHypertext += `
+            МУЗЕЙ: <b><a>${data[i].museum_name}</b></a><br>
+        	ГДЕ НАЙТИ: <b>${where_to_find}</b>`;
         if(authorized)
         {
             if(data[i].liked == 1)
@@ -153,32 +148,6 @@ async function fetch_paintings() {
     };
     node.innerHTML = innerHypertext;
     console.log(paintingsRegistry)
-}
-
-async function fetch_authors() {
-    var node = document.getElementById('paintings_placeholder');
-    const query = document.getElementById("searchbar").value
-    if(query == "")
-    {
-        node.innerHTML = ''
-        return
-    }
-    const response = await fetch(`http://localhost:8080/authors_${query}`)
-    if (!response.ok)
-    {
-        //check for errors later
-        node.innerHTML = ''
-        return;
-    }
-    const data = await response.json()
-    console.log(data.length)
-    
-    innerHypertext = ''
-    for (let i = 0; i < data.length; i++)
-    {
-        innerHypertext += `<div>${data[i].name}(${data[i].birth_year}-${data[i].death_year})<hr></div>`
-    };
-    node.innerHTML = innerHypertext;
 }
 
 async function hitLikeButton(buttonId)
@@ -219,7 +188,7 @@ async function likePainting(paintingId)
 
         likedObjData = paintingsRegistry.get(paintingId)
 
-        document.getElementById(`cabinet-favorites`).innerHTML += `
+		newPaintingTagText = `
         <div id = "favorite-${likedObjData.id}">
             <div class="search-pic">
                 <img src="assets/${likedObjData.picture_address}" width="100%">
@@ -231,6 +200,17 @@ async function likePainting(paintingId)
             </div>
             <hr>
         </div>`
+        favorites = document.getElementById(`cabinet-favorites`)
+		boolNoFav = document.getElementById("no-favorites")
+		console.log(boolNoFav)
+		if(boolNoFav == null)
+		{
+			favorites.innerHTML += newPaintingTagText;
+		}
+		else
+		{
+			favorites.innerHTML = newPaintingTagText;
+		}
     }
 }
 
@@ -257,6 +237,10 @@ async function dislikePainting(paintingId)
         document.getElementById(`like-state${paintingId}`).innerHTML = 0
         document.getElementById(`like-button${paintingId}`).style.cssText = "color:black; background-color:white;"
         document.getElementById(`favorite-${paintingId}`).outerHTML = ``;
+		if(document.getElementById(`cabinet-favorites`).innerHTML.replace(/ /g, "").length < 10)
+		{
+			document.getElementById(`cabinet-favorites`).innerHTML = `<div id = "no-favorites" style="display:none;"></div>Кажется, у вас пока нет любимых картин...`
+		}
     }
 }
 
@@ -430,7 +414,7 @@ async function changeToAuthorized(data)
         console.log(data)
         if(data == null || data.length == 0)
         {
-            favoritesList.innerHTML = `Кажется, у вас пока нет любимых картин...`
+            favoritesList.innerHTML = `<div id = "no-favorites" style="display:none;"></div>Кажется, у вас пока нет любимых картин...`
         }
         else
         {
