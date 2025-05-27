@@ -1,3 +1,13 @@
+//=====================SUPPORT-FUNCTIONS-AKA-C-STYLE-INCLUDE-OF-UTILS======================================
+function formHighlightedSubstring(initial, toFind)
+{
+    console.log(initial)
+    console.log(toFind)
+    index = initial.toLowerCase().indexOf(toFind.toLowerCase())
+    return `${initial.substring(0,index)}<b style="background-color:yellow">${initial.substring(index, index+toFind.length)}</b>${initial.substring(index+toFind.length, initial.length)}`
+}
+//===============================END-OF-INCLUDE-SECTION====================================================
+
 searchingPaintingsMode = true;
 showLoginMode = true;
 
@@ -7,6 +17,9 @@ var signupForm;
 var authorizedWindow;
 
 var authorized = false;
+
+paintingsRegistry = new Map();
+
 
 window.onload=init;
 async function init()
@@ -64,20 +77,47 @@ async function fetch_paintings() {
         node.innerHTML = ''
         return
     }
-    const responce = await fetch(`http://localhost:8080/paintings_${query}`)
-    if (!responce.ok)
+    isNowSearchingByTitle = true
+    queryText = ``
+    if(searchingPaintingsMode)
     {
-        //check for errors later
+        isNowSearchingByTitle = true
+        queryText = `/paintings_${query}`
+        if(authorized) {
+            queryText = `/login_paintings_${query}`
+        }
+    }
+    else
+    {
+        isNowSearchingByTitle = false
+        queryText = `/paintings_by${query}`
+        if(authorized) {
+            queryText = `login_paintings_by${query}`
+        }
+    }
+    
+    const response = await fetch(queryText)
+    if (!response.ok)
+    {
+        if(authorized)
+        {
+            if (response.status == 401)
+            {
+                logout();
+            }
+        }
         node.innerHTML = ''
         return;
     }
-    const data = await responce.json()
+    const data = await response.json()
     console.log(data.length)
 
 
     innerHypertext = ''
+    paintingsRegistry.clear();
     for (let i = 0; i < data.length; i++)
     {
+        paintingsRegistry.set(data[i].id, data[i]);
         where_to_find = data[i].where_to_find==""?"не экспонируется":data[i].where_to_find
         innerHypertext += `
         <div class="search-res">
@@ -85,25 +125,34 @@ async function fetch_paintings() {
                 <img src="assets/${data[i].picture_address}" width="100%">
             </div>
             <div class="search-desc"> 
-                НАЗВАНИЕ: <b>${data[i].title}(${data[i].creation_year})</b><br>
+                НАЗВАНИЕ: <b>${formHighlightedSubstring(data[i].title, query)}(${data[i].creation_year})</b><br>
                 АВТОР: <b>${data[i].author_name}</b><br>
                 МУЗЕЙ: <b><a>${data[i].museum_name}</b></a><br>
                 ГДЕ НАЙТИ: <b>${where_to_find}</b>
             `;
         if(authorized)
         {
-            innerHypertext += `
-            <hr>
-            <button onclick="likePainting(${data[i].id})" style="color:white; background-color:#f567be;">&hearts;</button> мне нравится<br>
-            <button onclick="dislikePainting(${data[i].id})">не нравится</button>
-            <hr>
-            `
+            if(data[i].liked == 1)
+            {
+                innerHypertext += `
+                <hr>
+                <div id="like-state${data[i].id}" style="display:none;">${parseInt(data[i].liked)}</div>
+                <button id="like-button${data[i].id}" onclick="hitLikeButton(${data[i].id})" style="color:white; background-color:#f567be;">&hearts;</button> мне нравится<br>
+                <hr>`
+            }
+            else
+            {
+                innerHypertext += `
+                <hr>
+                <div id="like-state${data[i].id}" style="display:none;">${parseInt(data[i].liked)}</div>
+                <button id="like-button${data[i].id}" onclick="hitLikeButton(${data[i].id})" style="color: black; background-color:white;">&hearts;</button> мне нравится<br>
+                <hr>`
+            }
         }
         innerHypertext += `</div></div>`
     };
-    console.log(innerHypertext)
-    console.log(data.length)
     node.innerHTML = innerHypertext;
+    console.log(paintingsRegistry)
 }
 
 async function fetch_authors() {
@@ -114,14 +163,14 @@ async function fetch_authors() {
         node.innerHTML = ''
         return
     }
-    const responce = await fetch(`http://localhost:8080/authors_${query}`)
-    if (!responce.ok)
+    const response = await fetch(`http://localhost:8080/authors_${query}`)
+    if (!response.ok)
     {
         //check for errors later
         node.innerHTML = ''
         return;
     }
-    const data = await responce.json()
+    const data = await response.json()
     console.log(data.length)
     
     innerHypertext = ''
@@ -132,9 +181,21 @@ async function fetch_authors() {
     node.innerHTML = innerHypertext;
 }
 
+async function hitLikeButton(buttonId)
+{
+    //console.log(document.getElementById(`like-state${buttonId}`).innerHTML == 1)
+    if (parseInt(document.getElementById(`like-state${buttonId}`).innerHTML) == 1)
+    {
+        dislikePainting(buttonId)
+    }
+    else
+    {
+        likePainting(buttonId)
+    }
+}
+
 async function likePainting(paintingId)
 {
-    console.log(paintingId)
     data = {
         painting_id: paintingId,
     };
@@ -153,7 +214,23 @@ async function likePainting(paintingId)
     }
     else
     {
-        console.log("GOOD");
+        document.getElementById(`like-state${paintingId}`).innerHTML = 1
+        document.getElementById(`like-button${paintingId}`).style.cssText = "color:white; background-color:#f567be;"
+
+        likedObjData = paintingsRegistry.get(paintingId)
+
+        document.getElementById(`cabinet-favorites`).innerHTML += `
+        <div id = "favorite-${likedObjData.id}">
+            <div class="search-pic">
+                <img src="assets/${likedObjData.picture_address}" width="100%">
+            </div>
+            <div class="search-desc"> 
+                <b>${likedObjData.title}(${likedObjData.creation_year})</b><br>
+                АВТОР: <b>${likedObjData.author_name}</b><br>
+                МУЗЕЙ: <b><a>${likedObjData.museum_name}</b></a><br>                            
+            </div>
+            <hr>
+        </div>`
     }
 }
 
@@ -177,7 +254,9 @@ async function dislikePainting(paintingId)
     }
     else
     {
-        console.log("GOOD");
+        document.getElementById(`like-state${paintingId}`).innerHTML = 0
+        document.getElementById(`like-button${paintingId}`).style.cssText = "color:black; background-color:white;"
+        document.getElementById(`favorite-${paintingId}`).outerHTML = ``;
     }
 }
 
@@ -286,13 +365,13 @@ function changeMode()
     searchingPaintingsMode = !searchingPaintingsMode;
     if(searchingPaintingsMode)
     {
-        document.getElementById("change-mode").innerHTML = `<input type="button" value="search authors instead" onclick="changeMode()">`;
-        document.getElementById("searchbar").placeholder = "Find your favorite paintings...";
+        document.getElementById("change-mode").innerHTML = `<input type="button" value="искать по имени автора" onclick="changeMode()">`;
+        document.getElementById("searchbar").placeholder = "искать картины по названию";
     }
     else
     {
-        document.getElementById("change-mode").innerHTML = `<input type="button" value="search paintings instead" onclick="changeMode()">`;
-        document.getElementById("searchbar").placeholder = "Find your favorite authors...";
+        document.getElementById("change-mode").innerHTML = `<input type="button" value="искать по названию" onclick="changeMode()">`;
+        document.getElementById("searchbar").placeholder = "искать картины по имени автора";
     }
 }
 
@@ -349,7 +428,7 @@ async function changeToAuthorized(data)
     {
         const data = await response.json()
         console.log(data)
-        if(data.length == 0)
+        if(data == null || data.length == 0)
         {
             favoritesList.innerHTML = `Кажется, у вас пока нет любимых картин...`
         }
@@ -358,9 +437,8 @@ async function changeToAuthorized(data)
             innerHypertext = ``
             for(let i = 0; i < data.length; i++)
             {
-                innerHypertext += 
-                `
-                    <div>
+                innerHypertext += `
+                    <div id = "favorite-${data[i].id}">
                         <div class="search-pic">
                             <img src="assets/${data[i].picture_address}" width="100%">
                         </div>
@@ -369,9 +447,8 @@ async function changeToAuthorized(data)
                             АВТОР: <b>${data[i].author_name}</b><br>
                             МУЗЕЙ: <b><a>${data[i].museum_name}</b></a><br>                            
                         </div>
-                    </div>
-                    <hr>
-                `;
+                        <hr>
+                    </div>`
             }
             favoritesList.innerHTML = innerHypertext;
         }

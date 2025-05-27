@@ -52,7 +52,7 @@ func getMuseum_PAGE(c *gin.Context) {
 	if err != nil {
 		fmt.Print("CRITICAL Error!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 	}
-	c.HTML(http.StatusOK, "museum_page.go.tmpl", gin.H{"museum_id": museum_id, "museum_name": m.Name, "users": usersList, "am_admin": right.IsAdmin, "my_id": userId})
+	c.HTML(http.StatusOK, "museum_page.html", gin.H{"museum_id": museum_id, "museum_name": m.Name, "users": usersList, "am_admin": right.IsAdmin, "my_id": userId})
 }
 
 func getRegisterAuthor_PAGE(c *gin.Context) {

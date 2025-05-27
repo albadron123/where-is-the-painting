@@ -74,8 +74,9 @@ var db *gorm.DB
 
 func main() {
 
+	fmt.Println("5432PORT")
 	//=====================================SETTING UP THE DATABASE GORM===========================================
-	connStr := "host=localhost user=postgres password=pass dbname=Paintings_Web_App port=5431 sslmode=disable"
+	connStr := "host=pg user=postgres password=pass dbname=Paintings_Web_App port=5432 sslmode=disable"
 	var err error
 	db, err = gorm.Open(postgres.New(postgres.Config{
 		DSN:                  connStr,
@@ -93,8 +94,8 @@ func main() {
 
 	//====================================CREATING DATA===========================================================
 
-	//addAuthorsIntoDB(20)
-	//addPaintingsIntoDB(100, 2, 3)
+	addAuthorsIntoDB(20)
+	addPaintingsIntoDB(100, 2, 1)
 
 	//====================================SETTING UP THE ROUTER===================================================
 	router := gin.Default()
@@ -146,7 +147,7 @@ func main() {
 
 	router.GET("/login_info", requireAuth, getLoginInfo)
 
-	router.Run("localhost:8080")
+	router.Run("0.0.0.0:8080")
 }
 
 func addPaintingsIntoDB(count int, authorId int, museumId int) {
@@ -197,8 +198,9 @@ func searchNewUsers(c *gin.Context) {
 		 WHERE 
 		 	id NOT IN (SELECT user_id FROM rights WHERE museum_id = ?) AND
 			LOWER(login) like LOWER(?) 
+		 ORDER BY position (lower(?) in lower(login))
 		 LIMIT 5`,
-		in.MuseumId, "%%"+in.Request+"%%").Scan(&results).Error
+		in.MuseumId, "%%"+in.Request+"%%", in.Request).Scan(&results).Error
 	if err != nil {
 		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": "something went wrong"})
 		return
@@ -222,7 +224,7 @@ func searchPainting(c *gin.Context) {
 	var results []Result = []Result{}
 	request := c.Param("request")
 	//fmt.Println("request:" + request)
-	err := db.Raw("select p.*, a.name as author_name, m.name as museum_name from ((select * from paintings where LOWER(title) like LOWER(?)) as p join authors as a on p.author_id=a.id) join museums as m on p.museum_id = m.id", "%%"+request+"%%").Scan(&results).Error
+	err := db.Raw("select p.*, a.name as author_name, m.name as museum_name from ((select * from paintings where LOWER(title) like LOWER(?)) as p join authors as a on p.author_id=a.id) join museums as m on p.museum_id = m.id order by position (lower(?) in lower(p.title)) limit 100", "%%"+request+"%%", request).Scan(&results).Error
 	if err != nil {
 		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": "something went wrong"})
 	}
@@ -253,24 +255,44 @@ func searchPaintingsLoggedIn(c *gin.Context) {
 	request := c.Param("request")
 
 	fmt.Println(request)
-
+	fmt.Println(userId)
 	var results []Result = []Result{}
+	fmt.Println("!")
 
-	err := db.Raw(`
-	create or replace temp view general_search as
-	select p.*, a.name as author_name, m.name as museum_name from 
-	((select * from paintings where LOWER(title) like LOWER(?)) as p join authors as a on p.author_id=a.id) join museums as m on p.museum_id = m.id;
-	create or replace temp view liked_ones as
-	select painting_id from user_preferences where user_id = ? and painting_id in (select id from general_search);
-	select sub.liked, general_search.* from
-	((select painting_id, 1 as "liked" from liked_ones) union
-	(select id, 0 as "liked" from general_search where id not in (select painting_id from liked_ones))) as sub join general_search on
-	general_search.id = sub.painting_id;
-	`, "'%%"+request+"%%'", userId).Find(&results).Error
+	err := db.Exec(`
+		create or replace temp view general_search as
+		select p.*, a.name as author_name, m.name as museum_name from
+		((select * from paintings where LOWER(title) like LOWER(?)) as p join authors as a on p.author_id=a.id) join museums as m on p.museum_id = m.id 
+		order by position (lower(?) in lower(p.title)) 
+		limit 100;
+		`, "%%"+request+"%%", request).Error
+	if err != nil {
+		fmt.Println(err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to create view"})
+		return
+	}
+
+	err = db.Exec(`
+		create or replace view liked_ones as
+		select painting_id from user_preferences where user_id = ? and painting_id in (select id from general_search);
+		`, userId).Error
+	if err != nil {
+		fmt.Println(err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to create view"})
+		return
+	}
+
+	err = db.Raw(`
+		select sub.liked, general_search.* from
+		((select painting_id, 1 as "liked" from liked_ones) union
+		(select id, 0 as "liked" from general_search where id not in (select painting_id from liked_ones))) as sub join general_search on
+		general_search.id = sub.painting_id;
+		`).Scan(&results).Error
 	if err != nil {
 		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": "something went wrong"})
+		return
 	}
-	//c.HTML(http.StatusOK, "index.html", gin.H{"paintings": paintings})
+
 	c.IndentedJSON(http.StatusOK, results)
 }
 
@@ -285,7 +307,10 @@ func searchAuthor(c *gin.Context) {
 
 	request := c.Param("request")
 	var authors = []Author{}
-	db.Where("lower(name) like lower(?)", "%%"+request+"%%").Limit(5).Find(&authors)
+	err := db.Raw("select * from authors where lower(name) like lower(?) order by position (lower(?) in lower(name)) limit 5", "%%"+request+"%%", request).Find(&authors).Error
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find paintings"})
+	}
 	//c.HTML(http.StatusOK, "index.html", gin.H{"paintings": paintings})
 	c.IndentedJSON(http.StatusOK, authors)
 }
@@ -436,9 +461,18 @@ func deletePainting(c *gin.Context) {
 		}
 		err = os.Remove("assets/" + p.PictureAddress)
 		if err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				fmt.Println(err.Error())
+				return err
+			}
+		}
+
+		err = db.Where("painting_id = ?", paintingId).Delete(&UserPreference{}).Error
+		if err != nil {
 			fmt.Println(err.Error())
 			return err
 		}
+
 		err = db.Delete(p).Error
 		if err != nil {
 			fmt.Println(err.Error())
@@ -730,7 +764,11 @@ func getMuseumPaintings(c *gin.Context) {
 	*/
 	//reason for type change of painting: we want to interpret years as strings
 	var paintings []Painting
-	err := db.Raw("select p.*, a.name as author_name from ((select * from paintings where museum_id = ? and LOWER(title) like LOWER(?)) as p join authors as a on p.author_id=a.id)", in.MuseumId, "%%"+in.Req+"%%").Offset(pageSize * in.PageId).Limit(pageSize).Find(&paintings).Error
+	err := db.Raw(`select p.*, a.name as author_name from 
+					((select * from paintings 
+						where museum_id = ? and LOWER(title) like LOWER(?)) as p join authors as a on p.author_id=a.id) 
+					order by position (lower(?) in lower(p.title)) offset ? limit ? `,
+		in.MuseumId, "%%"+in.Req+"%%", in.Req, pageSize*in.PageId, pageSize).Find(&paintings).Error
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to find paintings"})
 		return

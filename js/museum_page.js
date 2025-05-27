@@ -2,6 +2,16 @@ var GLOBAL_museumId = 0
 var GLOBAL_search_id = 0
 var GLOBAL_query = ''
 
+//=====================SUPPORT-FUNCTIONS-AKA-C-STYLE-INCLUDE-OF-UTILS======================================
+function formHighlightedSubstring(initial, toFind)
+{
+    console.log(initial)
+    console.log(toFind)
+    index = initial.toLowerCase().indexOf(toFind.toLowerCase())
+    return `${initial.substring(0,index)}<b style="background-color:yellow">${initial.substring(index, index+toFind.length)}</b>${initial.substring(index+toFind.length, initial.length)}`
+}
+//===============================END-OF-INCLUDE-SECTION====================================================
+
 window.onload=init;
 function init()
 {
@@ -34,7 +44,7 @@ async function search_users() {
         innerHypertext += 
         `
         <li class="search-res">
-            <b>${data[i].login}</b><button onclick="addUserToMuseum(${data[i].id},'${data[i].login}')">добавить</button><hr>
+            <b>${formHighlightedSubstring(data[i].login,query)}</b><button onclick="addUserToMuseum(${data[i].id},'${data[i].login}')">добавить</button><hr>
         </li>
         `
     };
@@ -75,7 +85,7 @@ async function addUserToMuseum(userId, userName)
     else
     {
         usersList.innerHTML += `<li id="user${userId}">
-                                    admin rights:<input type="checkbox" id="cb${userId}" onchange="checkRight(${userId})">
+                                    admin rights:<input type="checkbox" id="cb${userId}" onchange="checkRight(${userId})" class="unchecked-box">
                                     ${userName}
                                     <button onclick="deleteUser(${userId})">удалить</button>
                                 </li>`;
@@ -133,11 +143,11 @@ async function searchPaintingsInMuseum(pageId, query) {
     }
     for (let i = 0; i < data.length; i++)
     {
-        index = data[i].title.toLowerCase().indexOf(query.toLowerCase())
+        
         innerHypertext += 
         `
         <li class="search-res" id="p${data[i].id}">
-            "${data[i].title.substring(0,index)}<b style="background-color:yellow">${data[i].title.substring(index, index+query.length)}</b>${data[i].title.substring(index+query.length, data[i].title.length)}(${data[i].creation_year})"</b>
+            "${formHighlightedSubstring(data[i].title,query)}(${data[i].creation_year})"</b>
             автор: ${data[i].author_name}
             <button onclick="deletePainting(${data[i].id})">удалить</button>
             <hr>
@@ -198,6 +208,7 @@ async function deletePainting(painting_id)
 async function checkRight(userId) 
 {
     checkbox = document.getElementById(`cb${userId}`);
+    console.log(checkbox)
     updateInfo = document.getElementById(`update-info`);
     isAdmin = checkbox.checked;
     data = {
@@ -217,11 +228,30 @@ async function checkRight(userId)
     {
         rnd = Math.floor(Math.random() * 3)+5;
         updateInfo.innerHTML = `<i style="color:#${rnd}${rnd}${rnd}">информация не записалась.</i>`
-        checkbox.checked = !isAdmin;
+        if(!isAdmin == true)
+        {
+            console.log(checkbox.outerHTML)
+            checkbox.outerHTML = checkbox.outerHTML.replace("checked", `class="unchecked-box"`)
+            console.log(checkbox.outerHTML)
+        }
+        else
+        {
+            checkbox.outerHTML = checkbox.outerHTML.replace(`class="unchecked-box"`, "checked")
+        }
         return;
     }
     else
     {
+        if(!isAdmin == true)
+        {
+            console.log(checkbox.outerHTML)
+            checkbox.outerHTML = checkbox.outerHTML.replace("checked", `class="unchecked-box"`)
+            console.log(checkbox.outerHTML)
+        }
+        else
+        {
+            checkbox.outerHTML = checkbox.outerHTML.replace(`class="unchecked-box"`, "checked")
+        }
         rnd = Math.floor(Math.random() * 5)+3;
         updateInfo.innerHTML = `<i style="color:#${rnd}${rnd}${rnd}">информация записалась.</i>`
     }

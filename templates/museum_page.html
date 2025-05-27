@@ -9,6 +9,7 @@
             margin: 0;
             padding: 0;
             height: 100%;
+            font-family: monospace;
         }
 
         h1
@@ -58,6 +59,7 @@
         }
 
     </style>
+    <link rel="icon" type="image/x-icon" href="/assets/special/icon.ico">
     <link rel="stylesheet" href="/css/expandedsearch.css">
     <script src="/js/searchbar.js"></script>
     <script src="/js/museum_page.js"></script>
@@ -78,7 +80,7 @@
                             {{if eq $x.Id $y}}
                                 {{$x.Login}} (это ты)
                             {{else}}
-                                admin rights:<input type="checkbox" id="cb{{$x.Id}}" onchange="checkRight({{$x.Id}})" {{if $x.IsAdmin}}checked{{end}}>
+                                admin rights:<input type="checkbox" id="cb{{$x.Id}}" onchange="checkRight({{$x.Id}})" {{if $x.IsAdmin}}checked{{else}}class="unchecked-box"{{end}}>
                                 {{$x.Login}}
                                 <button onclick="deleteUser({{$x.Id}})">удалить</button>
                             {{end}}

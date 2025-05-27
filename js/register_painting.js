@@ -1,3 +1,14 @@
+//=====================SUPPORT-FUNCTIONS-AKA-C-STYLE-INCLUDE-OF-UTILS======================================
+function formHighlightedSubstring(initial, toFind)
+{
+    console.log(initial)
+    console.log(toFind)
+    index = initial.toLowerCase().indexOf(toFind.toLowerCase())
+    return `${initial.substring(0,index)}<b style="background-color:yellow">${initial.substring(index, index+toFind.length)}</b>${initial.substring(index+toFind.length, initial.length)}`
+}
+//===============================END-OF-INCLUDE-SECTION====================================================
+
+
 var GLOBAL_museumId = 0
 window.onload=init;
 async function init()
@@ -92,7 +103,7 @@ async function searchAuthors() {
         innerHypertext += 
         `
         <li class="search-res">
-            <b>${data[i].name}</b><button onclick="chooseAuthor(${data[i].id},'${data[i].name}')">выбрать автора</button><hr>
+            <b>${formHighlightedSubstring(data[i].name, query)}</b><button onclick="chooseAuthor(${data[i].id},'${data[i].name}')">выбрать автора</button><hr>
         </li>
         `
     }
